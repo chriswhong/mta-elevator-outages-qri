@@ -11,12 +11,12 @@ jobs:
       - node/with-cache:
           steps:
             - run: yarn
-      - run: node weather.js
+      - run: node script.js
 workflows:
   hourly:
     triggers:
       - schedule:
-          cron: "0 * * * *"
+          cron: "0 0 * * *"
           filters:
             branches:
               only:

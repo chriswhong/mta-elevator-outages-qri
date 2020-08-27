@@ -8,43 +8,17 @@ const streamPipeline = util.promisify(require('stream').pipeline)
 
 require('dotenv').config()
 
-const delay = ms => new Promise(res => setTimeout(res, ms));
-
-const headerRow = 'timestamp, name, main, description, temp, feels_like, pressure, humidity, visibility, wind_speed, wind_degrees\n'
-
 fs.ensureDirSync('./data')
 
 const downloadLatest = async ({ username, dsname, filePath, qriHost }) => {
   return new Promise(async (resolve, reject) => {
     console.log('download')
-    const response = await fetch(`${qriHost}/body/${username}/${dsname}?download=true`)
+    const response = await fetch(`https://s3.amazonaws.com/nyc-mta-elevator-outages/mta_elevator_outages.csv`)
     if (!response.ok) {
       fs.createWriteStream(filePath).write(headerRow)
     } else {
       await streamPipeline(response.body, fs.createWriteStream(filePath))
     }
-    resolve()
-  })
-}
-
-const updateCSV = async ({ filePath }) => {
-  return new Promise(async (resolve, reject) => {
-    // call to openweathermap api, Brooklyn NY city id is 5110302
-    const apiCall = `https://api.openweathermap.org/data/2.5/weather?id=5110302&appid=${process.env.OPENWEATHERMAP_API_KEY}`
-
-    const response = await fetch(apiCall)
-     .then(res => res.json())
-
-    console.log(response)
-
-    const { dt, name, weather, main, wind, visibility } = response
-    const [{ main: mainWeather, description }] = weather
-    const { temp, feels_like, pressure, humidity } = main
-    const { speed: wind_speed, deg: wind_degrees } = wind
-
-    // append a line to the CSV
-    const newLine = `"${new Date(dt * 1000).toISOString()}","${name}","${mainWeather}","${description}",${temp},${feels_like},${pressure},${humidity},${visibility},${wind_speed},${wind_degrees}\n`
-    fs.appendFileSync(filePath, newLine)
     resolve()
   })
 }
@@ -67,6 +41,10 @@ const qriSaveAndPublish = async (options) => {
         method: 'POST',
         body: formData
       })
+        .then((res) => {
+          console.log(res)
+          return res
+        })
         .then(res => res.json())
         .then(json => console.log(json))
 
@@ -88,21 +66,18 @@ const qriSaveAndPublish = async (options) => {
 (async () => {
   const options = {
     username: 'qri-autobot',
-    dsname: 'brooklyn-hourly-weather',
-    filePath: 'data/brooklyn.csv',
+    dsname: 'nyc-subway-elevators',
+    filePath: 'data/elevators.csv',
     qriHost: 'http://qri-autobot.chriswhong.com:2503'
   }
   try {
     // save the current dataset body as a CSV
     await downloadLatest(options)
 
-    // append a row with current weather data
-    await updateCSV(options)
-
     // commit and push to qri cloud
     await qriSaveAndPublish(options)
   } catch(e) {
-    console.log('Something went wrong')
+    console.log('Something went wrong', e)
   }
 })().catch(err => {
     console.error(err);
